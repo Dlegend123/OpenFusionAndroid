@@ -28,7 +28,7 @@
 13. Move the OpenFusion folder to your Android Device.
 
 ## OpenFusion directory
-![alt text](https://github.com/Dlegend123/OpenFusionAndroid/blob/master/OpenFusion%20Directory.png)
+![alt text](https://github.com/Dlegend123/OpenFusionAndroid/blob/master/OpenFusion.png)
 
 ## OpenFusion/OpenFusionLauncher directory
 ![alt text](https://github.com/Dlegend123/OpenFusionAndroid/blob/master/OpenFusionLauncher.png)
