@@ -5,7 +5,7 @@ DetectHiddenWindows True
 ; ===========================
 ; CONFIGURATION
 ; ===========================
-SERVER_DIR := A_ScriptDir "\OpenFusionServer-Academy"
+SERVER_DIR := A_ScriptDir "\OpenFusionServer"
 LAUNCHER_DIR := A_ScriptDir "\OpenFusionLauncher"
 VERSION_UUID := "6543a2bb-d154-4087-b9ee-3c8aa778580a"
 CACHE_DIR := LAUNCHER_DIR "\offline_cache\" VERSION_UUID
@@ -41,3 +41,4 @@ RunWait(ffCmd, LAUNCHER_DIR)
 Run('taskkill /IM winfusion.exe /F >nul 2>&1', , "Hide")
 
 ExitApp
+
