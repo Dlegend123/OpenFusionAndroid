@@ -30,13 +30,13 @@
 13. Move the OpenFusion folder to your Android Device.
 
 ## OpenFusion directory
-![alt text]([image-url]([OpenFusionDirectory.png](https://github.com/Dlegend123/OpenFusionAndroid/blob/master/OpenFusion%20Directory.png)))
+![alt text](https://github.com/Dlegend123/OpenFusionAndroid/blob/master/OpenFusion%20Directory.png)
 
 ## OpenFusion/OpenFusionLauncher directory
-![alt text]([image-url]([OpenFusionLaunceher.png](https://github.com/Dlegend123/OpenFusionAndroid/blob/master/OpenFusionLauncher.png)))
+![alt text](https://github.com/Dlegend123/OpenFusionAndroid/blob/master/OpenFusionLauncher.png)
 
 ## OpenFusion/OpenFusionServer directory
-![alt text]([image-url]([OpenFusionServer.png](https://github.com/Dlegend123/OpenFusionAndroid/blob/master/OpenFusionServer.png)))
+![alt text](https://github.com/Dlegend123/OpenFusionAndroid/blob/master/OpenFusionServer.png)
 
 ## Winlator
 
