@@ -5,9 +5,9 @@
 # Prerequisites
 - Download the latest OpenfusionLauncher(Windows Portable) on PC.  https://github.com/OpenFusionProject/OpenFusionLauncher/releases
 - Download the latest Openfusion Server(Windows Academy/Original) on PC. https://github.com/OpenFusionProject/OpenFusion/releases
-- Download the OpenFusion.ahk file from this repo or copy its contents and create a new OpenFusion.ahk file
+- Download the OpenFusion.ahk file repo or copy its contents and create a new OpenFusion.ahk file. 
 - Download and install AutoHotKey on PC. https://www.autohotkey.com/
-- Download and install Winlator and/Gamehub on the Android device.
+- Download and install Winlator and/Gamehub on the Android device. https://github.com/Dlegend123/OpenFusionAndroid/blob/master/OpenFusion.ahk
 
 1. Create an OpenFusion folder
 2. Copy the extracted OpenFusionLauncher-main folder to the OpenFusion folder
