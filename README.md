@@ -1,5 +1,3 @@
-<p align="center"><img width="640" src="res/openfusion-hero.png" alt="OpenFusion Logo"></p>
-
 # Run OpenFusion(Offline) on Android
 
 # Prerequisites
