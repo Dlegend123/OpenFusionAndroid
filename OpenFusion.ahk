@@ -1,69 +1,65 @@
 #SingleInstance Force
 SetWorkingDir A_ScriptDir
-DetectHiddenWindows True
 
-; ===========================
-; CONFIGURATION
-; ===========================
-serverDir  := A_ScriptDir "\OpenFusionServer"
-launcherDir := A_ScriptDir "\OpenFusionLauncher"
-uuid       := "6543a2bb-d154-4087-b9ee-3c8aa778580a"
-cacheDir   := launcherDir "\offline_cache\" uuid
-mainFile   := cacheDir "\main.unity3d"
-logFile    := launcherDir "\ffrunner_output.txt"
-configFile := serverDir "\config.ini"
-address    := "127.0.0.1:23000"  ; default / fallback
-assetUrl   := "file:///" StrReplace(cacheDir, "\", "/") "/"
-
-; ===========================
-; VERIFY FILES & FOLDERS
-; ===========================
-missing := ""
-if !DirExist(serverDir)
-    missing .= "- Missing server folder:`n" serverDir "`n`n"
-if !FileExist(serverDir "\winfusion.exe")
-    missing .= "- Missing winfusion.exe in server folder.`n`n"
-if !DirExist(launcherDir)
-    missing .= "- Missing launcher folder:`n" launcherDir "`n`n"
-if !DirExist(cacheDir)
-    missing .= "- Missing cache directory:`n" cacheDir "`n`n"
-if !FileExist(mainFile)
-    missing .= "- Missing main.unity3d:`n" mainFile "`n`n"
-
-if (missing) {
-    MsgBox("The following required items were not found:`n`n" missing, "Missing Files", "Icon! 4096")
+; read config.ini next to this script
+configFile := A_ScriptDir "\config.ini"
+if !FileExist(configFile) {
+    MsgBox "config.ini not found."
     ExitApp
 }
 
-; ===========================
-; READ PORT FROM CONFIG
-; ===========================
-if FileExist(configFile) {
-    text := FileRead(configFile)
-    if RegExMatch(text, "\[login\][^\[]*?port\s*=\s*(\d+)", &m)
-        address := "127.0.0.1:" m[1]
+; --- parse config ---
+config := Map(), section := ""
+for line in StrSplit(FileRead(configFile), "`n", "`r") {
+    line := Trim(line)
+    if (line = "" || SubStr(line,1,1)="#")
+        continue
+    if RegExMatch(line, "^\[(.+)\]$", &m) {
+        section := m[1], config[section] := Map()
+        continue
+    }
+    if (section != "" && InStr(line,"=")) {
+        p := StrSplit(line,"=",,2)
+        config[section][Trim(p[1])] := Trim(p[2])
+    }
 }
 
-; ===========================
-; START SERVER (hidden)
-; ===========================
-Run('"' serverDir '\winfusion.exe"', serverDir, "Hide")
+; --- values ---
+launcher := config["launcher"]
+SERVER_DIR   := A_ScriptDir "\" launcher["server_dir"]
+LAUNCHER_DIR := A_ScriptDir "\" launcher["launcher_dir"]
+CACHE_DIR    := A_ScriptDir "\" launcher["cache_dir"]
+VERSION_UUID := launcher["version_uuid"]
+LOGIN_PORT   := config["login"]["port"]
 
-; ===========================
-; RUN GAME
-; ===========================
-ffCmd := Format(
-    'ffrunner.exe --force-vulkan -m "{}" -a "{}" --asseturl "{}" -l "{}"',
-    mainFile,
-    address,
-    assetUrl,
-    logFile
-)
-RunWait(ffCmd, launcherDir)
+USERNAME := launcher.Has("username") ? launcher["username"] : ""
+TOKEN    := launcher.Has("token")    ? launcher["token"]    : ""
+WIDTH    := launcher.Has("width")    ? launcher["width"]    : ""
+HEIGHT   := launcher.Has("height")   ? launcher["height"]   : ""
+LOG_FILE := launcher.Has("log_file") ? launcher["log_file"] : ""
 
-; ===========================
-; CLEANUP (force close server)
-; ===========================
-RunWait('taskkill /IM winfusion.exe /F >nul 2>&1', , "Hide")
+; --- start server if not already running ---
+if !ProcessExist("winfusion.exe") {
+    Run('"' SERVER_DIR '\winfusion.exe"', SERVER_DIR, "Normal")
 
+}
+
+; --- build and detach launcher command ---
+VERSION_PATH := CACHE_DIR "\" VERSION_UUID
+MAIN_FILE := VERSION_PATH "\main.unity3d"
+ASSET_URL := "file:///" StrReplace(VERSION_PATH,"\","/") "/"
+ADDRESS := "127.0.0.1:" LOGIN_PORT
+
+cmd := 'ffrunner.exe --force-vulkan '
+    . '-m "' MAIN_FILE '" '
+    . '-a "' ADDRESS '" '
+    . '--asseturl "' ASSET_URL '" '
+if (USERNAME && TOKEN)
+    cmd .= '--username "' USERNAME '" --token "' TOKEN '" '
+if (WIDTH && HEIGHT)
+    cmd .= '--width ' WIDTH ' --height ' HEIGHT ' '
+if (LOG_FILE)
+    cmd .= '-l "' LOG_FILE '" '
+
+Run(cmd, LAUNCHER_DIR)
 ExitApp

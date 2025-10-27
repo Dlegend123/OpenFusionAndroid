@@ -3,8 +3,6 @@
 # Prerequisites
 - Download the latest OpenfusionLauncher(Windows Portable) on PC.  https://github.com/OpenFusionProject/OpenFusionLauncher/releases
 - Download the latest Openfusion Server(Windows Academy/Original) on PC. https://github.com/OpenFusionProject/OpenFusion/releases
-- Download the OpenFusion.ahk file repo or copy its contents and create a new OpenFusion.ahk file. 
-- Download and install AutoHotKey on PC. https://www.autohotkey.com/
 - Download and install Winlator and/Gamehub on the Android device. https://github.com/Dlegend123/OpenFusionAndroid/blob/master/OpenFusion.ahk
 
 1. Create an OpenFusion folder.
@@ -19,13 +17,35 @@
 - Copy the parent offline_cache folder to the OpenFusionLauncher-main folder you extracted
 4. Rename OpenFusionLauncher-main to OpenFusionLauncher.
 5. Create an OpenFusionServer folder in the OpenFusion folder and copy the extracted contents of Openfusion Server(Windows Academy/Original) to it
-7. Open AutoHotKey Dash.
-8. Click on Compile.
-9. Click the `Browse` button at the `Source(script file)` field and select the OpenFusion.ahk file.
-10. Click the `Browse` button at the `Destination(.exe file)` field and go to the OpenFusion folder.
-11. Enter a name for the exe file then click `Save`.
-12. Click the `Convert` button at the `Convert to executable` label.
-13. Move the OpenFusion folder to your Android Device.
+6. Copy the config.ini file from the OpenFusion Server and paste it into the OpenFusion folder. Add the following lines to the end of the file:
+	```
+	[launcher]
+	# full path to the OpenFusionServer folder
+	server_dir=OpenFusionServer
+
+	# full path to the OpenFusionLauncher folder
+	launcher_dir=OpenFusionLauncher
+
+	# path to the offline_cache directory
+	cache_dir=OpenFusionLauncher\offline_cache
+
+	# UUID folder name inside offline_cache
+	version_uuid=6543a2bb-d154-4087-b9ee-3c8aa778580a
+
+	# optional: username for automatic login (if supported)
+	#username=dummy
+
+	# optional: authentication token for automatic login
+	#token=dummy
+
+	# optional: custom window dimensions (ffrunner uses defaults if omitted)
+	width=2560
+	height=1440
+
+	# optional: custom log file (ffrunner uses internal default if omitted)
+	log_file=ffrunner_output.txt~
+	```
+7. Move the OpenFusion folder to your Android Device.
 
 ## OpenFusion directory
 ![alt text](https://github.com/Dlegend123/OpenFusionAndroid/blob/master/OpenFusion.png)
@@ -41,5 +61,5 @@
 ## Gamehub
 - Import the OpenFusion.exe file in Gamehub.
 - Use proton10.0-arm64x-2 as the `Compatibility Layer`.
-- Use Performance as the `Translation Params`.
+- Use Extreme as the `Translation Params`.
 - For the `DXVK Version` you can use dxvk-v2.6.2-1-async.

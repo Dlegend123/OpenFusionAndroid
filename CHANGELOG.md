@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 **Author:** Mark Morrison  
 **Language:** AutoHotkey v2  
 **Last Updated:** 2025-10-27  
+___
+
+### [1.9.0] - 2025-10-27]
+- Simplified process handling to improve stability on Winlator and GameHub.
+- Server (`winfusion.exe`) now starts only if not already running.
+- Removed forced server shutdown after game exit to avoid premature termination.
+- Changed process launch behavior:
+  - Replaced `RunWait` with detached `Run` to prevent AutoHotkey from freezing the game.
+  - Added short delay and graceful `ExitApp` to ensure proper release of input focus under Wine.
+- Removed unnecessary port checks and startup delays.
+- A config file is now expected in the same directory as the OpenFusion executable.
+- All paths in the config file can be **relative** to the OpenFusion executable directory.
+- Username, token, width, and height are now optional and read from `[launcher]` section if present.
+- File verification restored for critical folders and assets (server, launcher, cache, main.unity3d).
 
 ---
 
