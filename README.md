@@ -43,7 +43,7 @@
 	height=1440
 
 	# optional: custom log file (ffrunner uses internal default if omitted)
-	log_file=ffrunner_output.txt~
+	log_file=ffrunner_output.txt
 	```
 7. Move the OpenFusion folder to your Android Device.
 
