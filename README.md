@@ -60,6 +60,6 @@
 
 ## Gamehub
 - Import the OpenFusion.exe file in Gamehub.
-- Use proton10.0-arm64x-2 as the `Compatibility Layer`.
+- Use wine10.6-arm64x-2 as the `Compatibility Layer`.
 - Use Extreme as the `Translation Params`.
-- For the `DXVK Version` you can use dxvk-v2.6.2-1-async.
+- For the `DXVK Version` you can use dxvk-1.10.3
