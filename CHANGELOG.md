@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 **Last Updated:** 2025-10-28  
 ___
 
+## [1.7.0] - 2025-11-21]
+### Added
+- Fullscreen mode support via `--fullscreen` parameter.
+- Resolved path issues for asset_url and offline_cache in config file.
+
 ## [1.5.0] - 2025-10-28
 ### Changed
 - Fully restructured launcher for improved compatibility with **GameHub** and **Winlator**.
