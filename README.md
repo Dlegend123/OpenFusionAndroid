@@ -19,31 +19,34 @@
 5. Create an OpenFusionServer folder in the OpenFusion folder and copy the extracted contents of Openfusion Server(Windows Academy/Original) to it
 6. Copy the config.ini file from the OpenFusion Server and paste it into the OpenFusion folder. Add the following lines to the end of the file:
 	```
-	[launcher]
-	# full path to the OpenFusionServer folder
-	server_dir=OpenFusionServer
+	# ===========================================================
+	# Launcher Configurations
+	# ===========================================================
 
-	# full path to the OpenFusionLauncher folder
-	launcher_dir=OpenFusionLauncher
+	[launcher:local]
+	# full path to the OpenFusionServer executable
+	server = OpenFusionServer\winfusion.exe
+ 
+	# full path to the OpenFusionLauncher executable
+	launcher = OpenFusionLauncher\ffrunner.exe
 
 	# path to the offline_cache directory
-	cache_dir=OpenFusionLauncher\offline_cache
-
-	# UUID folder name inside offline_cache
-	version_uuid=6543a2bb-d154-4087-b9ee-3c8aa778580a
+	OpenFusionLauncher\offline_cache\6543a2bb-d154-4087-b9ee-3c8aa778580a
 
 	# optional: username for automatic login (if supported)
-	#username=dummy
+	#username = dummy
 
 	# optional: authentication token for automatic login
-	#token=dummy
-
-	# optional: custom window dimensions (ffrunner uses defaults if omitted)
-	width=2560
-	height=1440
+	#token = dummy
 
 	# optional: custom log file (ffrunner uses internal default if omitted)
-	log_file=ffrunner_output.txt
+	log_file = ffrunner_output.txt
+
+	# optional: forces vulkan to be used
+	force_vulkan = true
+
+ 	# optional: allows opening the launcher in fullscreen
+ 	fullscreen = true
 	```
 7. Move the OpenFusion folder to your Android Device.
 
@@ -60,6 +63,6 @@
 
 ## Gamehub
 - Import the OpenFusion.exe file in Gamehub.
-- Use proton10.0-arm64x-2 as the `Compatibility Layer`.
+- Use wine10.6-arm64x-2 as the `Compatibility Layer`.
 - Use Extreme as the `Translation Params`.
-- For the `DXVK Version` you can use dxvk-v2.6.2-1-async.
+- For the `DXVK Version` you can use dxvk-1.10.3

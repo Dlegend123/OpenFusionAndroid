@@ -11,65 +11,6 @@ serverDir := ""
 serverName := ""
 launcherExe := ""
 
-; ===========================================================
-; UTILS
-; ===========================================================
-ResolvePath(path) {
-    return (path != "" && SubStr(path,2,1) != ":") ? A_ScriptDir "\" path : path
-}
-
-Join(sep, arr) {
-    out := ""
-    for i, val in arr
-        out .= (i>1 ? sep : "") val
-    return out
-}
-
-; ================================
-; FUNCTIONS
-; ================================
-
-; Waits for a specific line to appear in a file, with timeout in seconds
-WaitForServerLogLine(logFile, text, timeout := 15) {
-    start := A_TickCount
-    loop {
-        Sleep(500)
-        if FileExist(logFile) {
-            data := FileRead(logFile)
-            if InStr(data, text) {
-                return true
-            }
-        }
-        if (A_TickCount - start >= timeout*1000)
-            return false
-    }
-}
-
-; Run an executable with optional admin privileges and hidden window
-RunExeAsAdmin(exePath, params := "", workingDir := "", hide := false) {
-    if (exePath = "")
-        return false
-
-    opts := ""
-    if (hide)
-        opts := "Hide RunAs"
-    else
-        opts := "RunAs"
-
-    ; Determine working directory
-    if (workingDir = "")
-        SplitPath(exePath, , &workingDir)
-    if (workingDir = "")
-        workingDir := A_ScriptDir
-
-    Run('"' . exePath . '" ' . params, workingDir, opts)
-}
-
-
-; ===========================================================
-; CONFIGURATION (read INI)
-; ===========================================================
-configFile := A_ScriptDir "\config.ini"
 if !FileExist(configFile) {
     MsgBox "Error: config.ini not found in " A_ScriptDir
     ExitApp
