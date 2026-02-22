@@ -7,10 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 **Project:** OpenFusion AutoHotkey Launcher  
 **Author:** Mark Morrison  
 **Language:** AutoHotkey v2  
-**Last Updated:** 2025-10-28  
+**Last Updated:** 2026-02-22  
 ___
 
-## [1.7.0] - 2025-11-21]
+## [1.8.0] - 2026-02-22
+### Changed
+- Updated fullscreen handling to reduce wait times for the launcher window.
+- Reduced server log line wait timeout from 15 seconds to 5 seconds since 15 is unnecessary
+- Changed application icon
+
+## [1.7.0] - 2025-11-21
 ### Added
 - Fullscreen mode support via `--fullscreen` parameter.
 - Resolved path issues for asset_url and offline_cache in config file.
@@ -41,7 +47,7 @@ ___
 - All paths in the config file can be **relative** to the OpenFusion executable directory.
 - Username, token, width, and height are now optional and read from `[launcher]` section if present.
 
----
+--- 
 
 ## [1.3.0] - 2025-10-26
 ### Added
@@ -56,7 +62,7 @@ ___
 - Removed unused variables and redundant conditions.
 - Combined command-line parameters into a single `Format()` call.
 
----
+--- 
 
 ## [1.2.0] - 2025-10-25
 ### Added
@@ -70,7 +76,7 @@ ___
 - Improved user-facing error formatting.
 - Ensured consistent exit behavior.
 
----
+--- 
 
 ## [1.1.0] - 2025-10-24
 ### Added
@@ -84,7 +90,7 @@ ___
   - `main.unity3d`
 - Displayed missing files via formatted message box.
 
----
+--- 
 
 ## [1.0.0] - 2025-10-23
 ### Added
