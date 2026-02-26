@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 **Project:** OpenFusion AutoHotkey Launcher  
 **Author:** Mark Morrison  
 **Language:** AutoHotkey v2  
-**Last Updated:** 2026-02-22  
+**Last Updated:** 2026-02-26  
 ___
+
+## [1.9.0] - 2026-02-26
+### Added
+- Optional `startup_delay` parameter to mitigate the stuck on loading screen issue. The default is 50ms.
+
+### Changed
+- Reduced server log line wait timeout from 5 seconds to 3 seconds to shorten startup latency while keeping reliable readiness detection.
+- Improved fullscreen handling to further reduce focus flicker and launcher window wait times.
+- Cleaner default logs and clearer startup messages to the output pane.
+
+---
 
 ## [1.8.0] - 2026-02-22
 ### Changed

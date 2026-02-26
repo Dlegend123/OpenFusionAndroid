@@ -32,17 +32,18 @@ Join(sep, arr) {
 ; Waits for a specific line to appear in a file, with timeout in seconds
 WaitForServerLogLine(logFile, text, timeout := 10) {
     start := A_TickCount
-    loop {
-        Sleep(50)
+    while (A_TickCount - start < timeout*1000) {
         if FileExist(logFile) {
-            data := FileRead(logFile)
-            if InStr(data, text) {
+            f := FileOpen(logFile, "r")
+            f.Seek(0, 2) ; move to end
+            pos := f.Pos
+            f.Seek(Max(pos-1024,0)) ; read last KB only
+            if InStr(f.Read(), text)
                 return true
-            }
         }
-        if (A_TickCount - start >= timeout*1000)
-            return false
+        Sleep(50)
     }
+    return false
 }
 
 ; Run an executable with optional admin privileges and hidden window
@@ -124,6 +125,7 @@ logFile     := cfg.Has("log_file") ? ResolvePath(cfg["log_file"]) : ""
 loginPort   := (config.Has("login") && config["login"].Has("port")) ? config["login"]["port"] : "23000"
 windowTitle := cfg.Has("window_title") ? cfg["window_title"] : "FusionFall"
 launcherLog := A_ScriptDir "\launcher_log.txt"
+startupDelay := (cfg.Has("startup_delay")) ? cfg["startup_delay"] : 50
 timeoutSec := 5
 
 ; derive launcher executable name for monitoring
@@ -151,13 +153,7 @@ if (mode = "offline") {
         serverLog := A_ScriptDir "\server_output.txt"
 
         ; Launch the server hidden and redirect output to a file
-        Run(
-            'cmd.exe /c start "" /b "' serverExe '" > "' serverLog '" 2>&1',
-            serverDir,
-            "Hide",
-            &pid
-        )
-
+        Run('"' serverExe '" > "' serverLog '" 2>&1', serverDir, "Hide")
     }
 }
 
@@ -168,10 +164,13 @@ FileAppend(A_Now " - Waiting for server to start..." "`n", launcherLog)
 if (!WaitForServerLogLine(serverLog, "Starting shard server at", timeoutSec)) {
     FileAppend(A_Now " - ERROR: Server did not start within timeout." "`n", launcherLog)
     MsgBox("Server failed to start within " timeoutSec " seconds. See log.")
+    ExitApp
+} else {
+    FileAppend(A_Now " - Server is starting..." "`n", launcherLog)
+    Sleep(startupDelay)
+    FileAppend(A_Now " - Proceeding to launch client." "`n", launcherLog)
 }
-else{
-    FileAppend(A_Now " - Server is ready!" "`n", launcherLog)
-}
+
 
 ; ===========================================================
 ; BUILD LAUNCHER COMMAND
@@ -188,24 +187,25 @@ else if (mode = "online") {
 }
 
 ffArgs := []
-ffArgs.Push('-m "' mainFile '"')
-if (address != "")
-    ffArgs.Push('-a "' address '"')
+if (mainFile != "") ffArgs.Push('-m "' mainFile '"')
+if (assetUrl != "") ffArgs.Push('--asseturl "' assetUrl '"')
 
-if (assetUrl != "")
-    ffArgs.Push('--asseturl "' assetUrl '"')
+address := (mode = "offline") ? "127.0.0.1:" loginPort : (cfg.Has("address") ? cfg["address"] : "")
+if (address != "") ffArgs.Push('-a "' address '"')
 
-if (endpoint != "")
-    ffArgs.Push('--endpoint "' endpoint '"')
+endpoint := (cfg.Has("endpoint")) ? cfg["endpoint"]:""
+if (endpoint != "") ffArgs.Push('--endpoint "' endpoint '"')
 
-if (username != "" && token != "")
-    ffArgs.Push('--username "' username '" --token "' token '"')
+username := (cfg.Has("username"))?cfg["username"]:""
+token:= (cfg.Has("token"))?cfg["token"]: ""
 
-if (logFile != "")
-    ffArgs.Push('-l "' logFile '"')
+if (username != "" && token != "") ffArgs.Push('--username "' username '" --token "' token '"')
 
-if (forceVulkan)
-    ffArgs.Push('--force-vulkan')
+logFile := (cfg.Has("log_file")) ? ResolvePath(cfg["log_file"]) : ""
+if (logFile != "") ffArgs.Push('-l "' logFile '"')
+
+if (forceVulkan) ffArgs.Push('--force-vulkan')
+
 
 ffCmd := '"' launcherExe '" ' Join(" ", ffArgs)
 FileAppend(A_Now " - Launcher Command: " ffCmd "`n", launcherLog)
