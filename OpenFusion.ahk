@@ -1,244 +1,404 @@
 #SingleInstance Force
 SetWorkingDir A_ScriptDir
-DetectHiddenWindows True
 
-; ===========================================================
-; SAFETY: initialize globals
-; ===========================================================
-windowTitle := "FusionFall"
-launchDir := ""
-serverDir := ""
-serverName := ""
-launcherExe := ""
+; ============================================================
+; GLOBALS
+; ============================================================
+global serverPid := 0, clientPid := 0
+global __logBuffer := []
+global debugLog := A_ScriptDir "\debug_log.txt"
+global wrapperStartTime
 
-; ===========================================================
-; UTILS
-; ===========================================================
-ResolvePath(path) {
-    return (path != "" && SubStr(path,2,1) != ":") ? A_ScriptDir "\" path : path
+;Convert relative paths to absolute
+resolvePath(p) {
+    if !p
+        return p
+    if SubStr(p,2,1) != ":"
+        return A_ScriptDir "\" p
+    return p
 }
 
-Join(sep, arr) {
+Quote(x) => '"' x '"'
+
+; ============================================================
+; LOGGING FUNCTIONS
+; ============================================================
+; Append a message to the in-memory log buffer
+Log(msg, level:="INFO") {
+    global __logBuffer
+    time := FormatTime(,"yyyy-MM-dd HH:mm:ss")
+    __logBuffer.Push(time " [" level "] " msg "`n")
+}
+
+; Flush log buffer to disk
+FlushLogs() {
+    global __logBuffer, debugLog
+
+    if (__logBuffer.Length) {
+        FileAppend(StrJoin(__logBuffer), debugLog, "UTF-8")
+        __logBuffer := []
+    }
+}
+
+StrJoin(arr) {
     out := ""
-    for i, val in arr
-        out .= (i>1 ? sep : "") val
+    for v in arr
+        out .= v
     return out
 }
 
-; ================================
-; FUNCTIONS
-; ================================
+; ============================================================
+; WRAPPER SHUTDOWN
+; ============================================================
+; Stops all timers, closes resources, and exits the application
+ShutdownWrapper() {
+    global serverPid
 
-; Waits for a specific line to appear in a file, with timeout in seconds
-WaitForServerLogLine(logFile, text, timeout := 10) {
-    start := A_TickCount
-    while (A_TickCount - start < timeout*1000) {
-        if FileExist(logFile) {
-            f := FileOpen(logFile, "r")
-            f.Seek(0, 2) ; move to end
-            pos := f.Pos
-            f.Seek(Max(pos-1024,0)) ; read last KB only
-            if InStr(f.Read(), text)
-                return true
+    Log("Shutting down wrapper...")
+
+    ; Close server process if running
+    if serverPid {
+        CloseProcess(serverPid)
+        serverPid := 0
+    }
+
+    Log("Wrapper shutdown complete")
+    FlushLogs()
+    ExitApp
+}
+
+; ============================================================
+; PROCESS HELPERS
+; ============================================================
+; Get the PID of a child process for a given parent PID
+GetChildProcess(parentPID) {
+    TH32CS_SNAPPROCESS := 0x00000002
+    PROCESSENTRY32_SIZE := (A_PtrSize = 8) ? 568 : 556
+
+    snapshot := DllCall("CreateToolhelp32Snapshot","UInt",TH32CS_SNAPPROCESS,"UInt",0,"Ptr")
+    
+	if snapshot = -1
+		return 0
+
+    pe := Buffer(PROCESSENTRY32_SIZE,0)
+    NumPut("UInt",PROCESSENTRY32_SIZE,pe)
+
+    if !DllCall("Process32First","Ptr",snapshot,"Ptr",pe) {
+        DllCall("CloseHandle","Ptr",snapshot)
+        return 0
+    }
+
+    loop {
+        ppid := NumGet(pe, A_PtrSize=8 ? 32 : 24, "UInt")
+        if (ppid = parentPID) {
+            pid := NumGet(pe,8,"UInt")
+            DllCall("CloseHandle","Ptr",snapshot)
+            return pid
         }
-        Sleep(50)
+    } until !DllCall("Process32Next","Ptr",snapshot,"Ptr",pe)
+
+    DllCall("CloseHandle","Ptr",snapshot)
+    return 0
+}
+
+; Close a process by PID or name
+CloseProcess(pid) {
+    try if ProcessExist(pid)
+        ProcessClose(pid)
+}
+
+; Follow a process chain to get the real PID (child process)
+ResolvePID(pid) {
+    while (child := GetChildProcess(pid)) && child != pid
+        pid := child
+    return pid
+}
+
+; ============================================================
+; PROCESS LAUNCHING
+; ============================================================
+; Prepare STARTUPINFO struct for CreateProcess
+PrepareStartupInfo(hide) {
+    P8 := (A_PtrSize = 8)
+    siSize := P8 ? 104 : 68
+    si := Buffer(siSize,0)
+
+    NumPut("UInt", siSize, si, 0)
+
+    if hide {
+        STARTF_USESHOWWINDOW := 0x1
+        NumPut("UInt", STARTF_USESHOWWINDOW, si, P8?60:44)
+        NumPut("UShort", 0, si, P8?64:48) ; SW_HIDE
     }
-    return false
+
+    return si
 }
 
-; Run an executable with optional admin privileges and hidden window
-RunExeAsAdmin(exePath, params := "", workingDir := "", hide := false) {
-    if (exePath = "")
-        return false
-
-    opts := ""
-    if (hide)
-        opts := "Hide RunAs"
-    else
-        opts := "RunAs"
-
-    ; Determine working directory
-    if (workingDir = "")
-        SplitPath(exePath, , &workingDir)
-    if (workingDir = "")
-        workingDir := A_ScriptDir
-
-    Run('"' . exePath . '" ' . params, workingDir, opts)
-}
-
-
-; ===========================================================
-; CONFIGURATION (read INI)
-; ===========================================================
-configFile := A_ScriptDir "\config.ini"
-if !FileExist(configFile) {
-    MsgBox "Error: config.ini not found in " A_ScriptDir
-    ExitApp
-}
-
-config := Map(), section := ""
-for line in StrSplit(FileRead(configFile), "`n", "`r") {
-    line := Trim(line)
-    if (line = "" || SubStr(line,1,1) = "#" || SubStr(line,1,1) = ";")
-        continue
-    if RegExMatch(line, "^\[(.+)\]$", &m) {
-        section := m[1]
-        config[section] := Map()
-        continue
+; Launch a process via CreateProcessW
+LaunchProcess(cmdLine, workDir, si, hide) {
+    P8 := (A_PtrSize = 8)
+    pi := Buffer(P8?24:16,0)
+	flags := hide ? 0x08000000 : 0  ; CREATE_NO_WINDOW only when hiding
+    cmdBuf := Buffer((StrLen(cmdLine)+1)*2)
+    StrPut(cmdLine, cmdBuf, "UTF-16")
+    wdPtr := 0
+    
+    if workDir {
+        dirBuf := Buffer((StrLen(workDir)+1)*2)
+        StrPut(workDir, dirBuf, "UTF-16")
+        wdPtr := dirBuf.Ptr
     }
-    if (section && InStr(line, "=")) {
-        parts := StrSplit(line, "=", , 2)
-        config[section][Trim(parts[1])] := Trim(parts[2])
+
+    success := DllCall("CreateProcessW", "ptr",0, "ptr",cmdBuf, "ptr",0, "ptr",0, "int", 0, "int",flags, "ptr",0, "ptr",wdPtr, "ptr",si, "ptr",pi)
+    if !success
+        return -1
+
+    ; Close thread/process handles
+    if P8 {
+        DllCall("CloseHandle","ptr",NumGet(pi,0,"Ptr"))
+        DllCall("CloseHandle","ptr",NumGet(pi,8,"Ptr"))
+    } else {
+        DllCall("CloseHandle","ptr",NumGet(pi,0,"Ptr"))
+        DllCall("CloseHandle","ptr",NumGet(pi,4,"Ptr"))
     }
+
+    return P8 ? NumGet(pi,16,"UInt") : NumGet(pi,8,"UInt")
 }
 
-; ===========================================================
-; SELECT ACTIVE SECTION
-; ===========================================================
-activeSection := ""
-for k, v in config {
-    if InStr(k, "launcher:") && v.Has("default") && v["default"] = "true" {
-        activeSection := k
-        break
+; Wrapper to start a process with optional output capture
+RunCMD(cmdLine, workDir:="", hide:=false) {
+    si := PrepareStartupInfo(hide)
+    pid := LaunchProcess(cmdLine, workDir, si, hide)
+	
+	return pid > 0 ? ResolvePID(pid) : pid
+}
+
+; ============================================================
+; SERVER FUNCTIONS
+; ============================================================
+StartServer() {
+    global c, serverPid
+    exe := c["server"]
+    
+    serverPid := RunCMD('"' exe '"', c["server_dir"])
+    
+    if (serverPid <= 0) {
+        errCode := DllCall("Kernel32\GetLastError")
+        MsgBox("Server failed to start.`nWinErr=" errCode)
+        Log("Failed to start server: " exe " WinErr=" errCode,"ERROR")
+        return
     }
-}
-if (activeSection = "")
-    activeSection := "launcher:local"
-
-cfg := config[activeSection]
-mode := cfg.Has("mode") ? cfg["mode"] : "offline"
-forceVulkan := (cfg.Has("force_vulkan") && cfg["force_vulkan"] = "true")
-fullscreen := (cfg.Has("fullscreen") && cfg["fullscreen"] = "true")
-
-; ===========================================================
-; PATHS & VARS
-; ===========================================================
-launcherExe := cfg.Has("launcher") ? ResolvePath(cfg["launcher"])  : ""
-serverExe   := cfg.Has("server") ? ResolvePath(cfg["server"]) : ""
-; rawCachePath is the local filesystem path (not file://)
-rawCachePath := cfg.Has("cache_dir") ? ResolvePath(cfg["cache_dir"]) : ""
-mainFile := (rawCachePath != "") ? "file:///" StrReplace(rawCachePath, "\", "/") "/main.unity3d" : ""
-assetUrl := (rawCachePath != "") ? "file:///" StrReplace(rawCachePath, "\", "/") "/" : ""
-username    := cfg.Has("username") ? cfg["username"] : ""
-token       := cfg.Has("token") ? cfg["token"] : ""
-logFile     := cfg.Has("log_file") ? ResolvePath(cfg["log_file"]) : ""
-loginPort   := (config.Has("login") && config["login"].Has("port")) ? config["login"]["port"] : "23000"
-windowTitle := cfg.Has("window_title") ? cfg["window_title"] : "FusionFall"
-launcherLog := A_ScriptDir "\launcher_log.txt"
-startupDelay := (cfg.Has("startup_delay")) ? cfg["startup_delay"] : 50
-timeoutSec := 5
-
-; derive launcher executable name for monitoring
-SplitPath(launcherExe, , &launchDir, &launcherName)
-
-; ===========================================================
-; VERIFY ESSENTIAL FILES
-; ===========================================================
-if (mode = "offline" && serverExe = "") {
-    MsgBox "Missing server path in config (server=...)."
-    ExitApp
-}
-if (mode = "offline" && !FileExist(serverExe)) {
-    MsgBox "Missing server executable:`n" serverExe
-    ExitApp
+    
+    Log("Started server: " exe " (PID=" serverPid ")")
 }
 
-; ===========================================================
-; START SERVER (OFFLINE MODE)
-; ===========================================================
-if (mode = "offline") {
-    SplitPath(serverExe, , &serverDir, , &serverName)
-    if (serverName != "") {
-        ; Run server hidden
-        serverLog := A_ScriptDir "\server_output.txt"
+; ============================================================
+; CLIENT LAUNCH
+; ============================================================
+BuildClientArgs() {
+    global c
+    
+    cache := c["cache_dir_url"]
+    args := ' -m ' Quote("file:///" cache "/main.unity3d")
+    args .= ' --asseturl ' Quote("file:///" cache "/")
+    args .= ' -a ' Quote(c["address"])
+    
+    if c["username"]
+        args .= ' --username ' Quote(c["username"])
+    if c["token"]
+        args .= ' --token ' Quote(c["token"])
+    if c["log_file"]
+        args .= ' -l ' Quote(c["log_file"])
+    if c["force_vulkan"] = "true"
+        args .= " --force-vulkan"
+        
+    return args
+}
 
-        ; Launch the server hidden and redirect output to a file
-        Run('"' serverExe '" > "' serverLog '" 2>&1', serverDir, "Hide")
+ApplyFullscreen() {
+    global clientPid, c
+    
+    try {
+            hwnd := WinExist("ahk_pid " clientPid)
+            
+            if !hwnd
+                hwnd := WinExist("ahk_exe " c["launcher_exe"])
+            
+            if !hwnd && c["window_title"]
+                hwnd := WinExist(c["window_title"])
+                
+            if hwnd {
+    			WinSetAlwaysOnTop(true, hwnd)
+    			WinSetStyle("-0xC40000", hwnd)
+    			WinMaximize(hwnd)
+    
+    			Log("Borderless fullscreen applied")
+    			SetTimer(ApplyFullscreen, 0)
+                ShutdownWrapper()
+    		}
+		
+    } catch as e {
+        Log("Failed to apply fullscreen: " e.Message, "ERROR")
     }
 }
 
-; ================================
-; WAIT FOR SERVER READY LINE
-; ================================
-FileAppend(A_Now " - Waiting for server to start..." "`n", launcherLog)
-if (!WaitForServerLogLine(serverLog, "Starting shard server at", timeoutSec)) {
-    FileAppend(A_Now " - ERROR: Server did not start within timeout." "`n", launcherLog)
-    MsgBox("Server failed to start within " timeoutSec " seconds. See log.")
-    ExitApp
-} else {
-    FileAppend(A_Now " - Server is starting..." "`n", launcherLog)
-    Sleep(startupDelay)
-    FileAppend(A_Now " - Proceeding to launch client." "`n", launcherLog)
+LaunchClient() {
+    global c, clientPid
+
+    args := BuildClientArgs()
+    exe := c["launcher"]
+    
+    clientPid := RunCMD('"' exe '" ' args, c["launcher_dir"])
+
+    if (clientPid <= 0) {
+        errCode := DllCall("Kernel32\GetLastError")
+        MsgBox("Client failed to start.`nWinErr=" errCode)
+        Log("Failed to start client: " exe " WinErr=" errCode,"ERROR")
+        return
+    }
+
+    Log("Started client: " exe " (PID=" clientPid ")")
+
+    if (c["fullscreen"] == "true")
+        SetTimer(ApplyFullscreen, 100)
+		
+	;SetTimer(MonitorClient, 200)
 }
 
-
-; ===========================================================
-; BUILD LAUNCHER COMMAND
-; ===========================================================
-address := ""
-endpoint := ""
-if (mode = "offline")
-    address := "127.0.0.1:" loginPort
-else if (mode = "online") {
-    if (cfg.Has("address"))
-        address := cfg["address"]
-    if (cfg.Has("endpoint"))
-        endpoint := cfg["endpoint"]
+MonitorClient() {
+    global clientPid, c
+	
+    if !ProcessExist(clientPid) {
+        SetTimer(MonitorClient, 0)
+        SetTimer(ApplyFullscreen, 0)
+        ShutdownWrapper()
+    }
 }
 
-ffArgs := []
-if (mainFile != "") ffArgs.Push('-m "' mainFile '"')
-if (assetUrl != "") ffArgs.Push('--asseturl "' assetUrl '"')
+; ============================================================
+; MAIN
+; ============================================================
+Main() {
+    global serverPid, clientPid
 
-address := (mode = "offline") ? "127.0.0.1:" loginPort : (cfg.Has("address") ? cfg["address"] : "")
-if (address != "") ffArgs.Push('-a "' address '"')
+    if serverPid && !ProcessExist(serverPid) {
+        Log("Server crashed","ERROR")
+        ShutdownWrapper()
+        return
+    }
 
-endpoint := (cfg.Has("endpoint")) ? cfg["endpoint"]:""
-if (endpoint != "") ffArgs.Push('--endpoint "' endpoint '"')
+    if !clientPid
+        LaunchClient()
+}
 
-username := (cfg.Has("username"))?cfg["username"]:""
-token:= (cfg.Has("token"))?cfg["token"]: ""
+LoadIniFile(path) {
+    ini := Map()
+    section := ""
 
-if (username != "" && token != "") ffArgs.Push('--username "' username '" --token "' token '"')
+    for line in StrSplit(FileRead(path), "`n", "`r") {
 
-logFile := (cfg.Has("log_file")) ? ResolvePath(cfg["log_file"]) : ""
-if (logFile != "") ffArgs.Push('-l "' logFile '"')
+        line := Trim(line)
 
-if (forceVulkan) ffArgs.Push('--force-vulkan')
+        if (line = "" || SubStr(line,1,1) = ";")
+            continue
 
+        if RegExMatch(line, "^\[(.+)\]$", &m) {
+            section := m[1]
+            ini[section] := Map()
+            continue
+        }
 
-ffCmd := '"' launcherExe '" ' Join(" ", ffArgs)
-FileAppend(A_Now " - Launcher Command: " ffCmd "`n", launcherLog)
-
-; ===========================================================
-; RUN LAUNCHER (detached, works better under Wine/GameHub)
-; ===========================================================
-if (launchDir = "")
-    launchDir := A_ScriptDir
-
-RunExeAsAdmin(launcherExe, Join(" ", ffArgs), launchDir)
-FileAppend(A_Now . " - Launched (detached) " . launcherExe . "`n", launcherLog)
-
-; ===========================================================
-; FULLSCREEN HANDLING
-; ===========================================================
-try {
-    if fullscreen {
-        ; Wait for the launcher window to appear
-        if WinWait(windowTitle, , 5) { ; wait up to 5 sec
-            WinActivate(windowTitle)
-            WinWaitActive(windowTitle, , 5) ; wait up to 5 sec for it to be active
-
-            ; Remove window styles and resize
-            WS_REMOVE := 0xC00000 | 0x00040000 | 0x20000000 | 0x01000000 | 0x00080000
-            WinSetStyle(-WS_REMOVE, windowTitle)
-            WinMove(0, 0, A_ScreenWidth, A_ScreenHeight, windowTitle)
-        } else {
-            FileAppend(A_Now " - ERROR: Launcher window did not appear in time." "`n", launcherLog)
+        if RegExMatch(line, "^(.*?)=(.*)$", &m) {
+            key := Trim(m[1])
+            val := Trim(m[2])
+            if section
+                ini[section][key] := val
         }
     }
-} catch as e {
-    FileAppend(A_Now . " - Fullscreen error: " . e.Message . "`n", launcherLog)
+
+    return ini
 }
 
-ExitApp
+; ============================================================
+; CONFIGURATION
+; ============================================================
+LoadConfig() {
+
+    global c
+
+    configFile := A_ScriptDir "\config.ini"
+
+    if !FileExist(configFile) {
+        MsgBox("Missing config.ini")
+        ExitApp
+    }
+
+    ini := LoadIniFile(configFile)
+
+    active := ""
+    for section,data in ini
+        if InStr(section,"launcher:")
+        && data.Get("default","")="true" {
+            if active {
+                MsgBox("Multiple launchers marked default")
+                ExitApp
+            }
+            active := section
+        }
+
+    if !active
+        active := "launcher:local"
+
+    s := ini[active]
+
+    c := Map(
+        "mode", s.Get("mode","offline"),
+        "cache_dir", resolvePath(s.Get("cache_dir","")),
+        "launcher", resolvePath(s.Get("launcher","")),
+        "server", resolvePath(s.Get("server","")),
+        "username", s.Get("username",""),
+        "token", s.Get("token",""),
+        "window_title", s.Get("window_title","FusionFall"),
+        "force_vulkan", s.Get("force_vulkan","false"),
+        "fullscreen", s.Get("fullscreen","false"),
+        "log_file", resolvePath(s.Get("log_file",""))
+    )
+
+    c["cache_dir_url"] := StrReplace(c["cache_dir"],"\","/")
+
+    loginPort := ini["login"].Get("port","8023")
+    shardPort := ini["shard"].Get("port","8024")
+
+    c["address"] := s.Get("address","127.0.0.1:" loginPort)
+
+    SplitPath(c["server"], &sname, &sdir)
+    c["server_dir"] := sdir
+    
+    SplitPath(c["launcher"], &lname, &ldir)
+    c["launcher_dir"] := ldir
+    c["launcher_exe"] := lname
+}
+
+; ============================================================
+; START WRAPPER
+; ============================================================
+StartWrapper() {
+	global wrapperStartTime
+	
+	wrapperStartTime := A_TickCount
+	
+    LoadConfig()
+	
+    if c["mode"]=="offline" {
+        StartServer()
+    }
+	
+	Main()
+}
+
+; Clear old logs
+if FileExist(debugLog)
+    FileDelete(debugLog)
+
+; Launch the wrapper
+StartWrapper()
