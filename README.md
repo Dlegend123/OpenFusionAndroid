@@ -13,8 +13,6 @@
 - Click the download button in the offline cache column for the specific build.
 - Click the blue button beside the download button.
 - In the new window copy the name of the current folder.
-- Open the OpenFusion.ahk file in a text editor and replace the `VERSION_UUID`'s value, "6543a2bb-d154-4087-b9ee-3c8aa778580a", with the name of the folder. Do not remove the quotation marks.
-- Copy the parent offline_cache folder to the OpenFusionLauncher-main folder you extracted
 4. Rename OpenFusionLauncher-main to OpenFusionLauncher.
 5. Create an OpenFusionServer folder in the OpenFusion folder and copy the extracted contents of Openfusion Server(Windows Academy/Original) to it
 6. Copy the config.ini file from the OpenFusion Server and paste it into the OpenFusion folder. Add the following lines to the end of the file:
