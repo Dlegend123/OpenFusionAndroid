@@ -63,6 +63,6 @@
 
 ## Gamehub
 - Import the OpenFusion.exe file in Gamehub.
-- Use wine10.0-x64-2 as the `Compatibility Layer`.
-- Use Performance as the `Translation Params`.
+- Can use wine10.0-x64-2 as the `Compatibility Layer`.
+- Can use Performance as the `Translation Params`.
 - `DXVK Version` varies depending on the GPU driver used.
