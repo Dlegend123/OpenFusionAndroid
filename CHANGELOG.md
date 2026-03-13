@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 **Project:** OpenFusion AutoHotkey Launcher  
 **Author:** Mark Morrison  
 **Language:** AutoHotkey v2  
-**Last Updated:** 2026-02-26  
+**Last Updated:** 2026-03-12  
+___
+
+## [2.0.0] - 2026-03-12
+### Added
+- In-memory logging buffer with timestamped log entries and flush-to-disk support (writes to debug_log.txt).
+- Centralized process launcher wrapper `RunCMD()` that starts detached processes and returns PIDs.
+- Robust INI parser (`LoadIniFile`) and improved config loader (`LoadConfig`) supporting launcher selection (`launcher:*`) and sensible fallbacks.
+- Relative-to-absolute path resolution helper (`resolvePath`) and `cache_dir_url` generation to produce file:/// asset URLs.
+- Graceful wrapper shutdown with `ShutdownWrapper()` that flushes logs and exits cleanly.
+- Tracking of server and client PIDs to allow non-blocking startup and basic crash detection.
+
+### Changed
+- Client and server are launched detached (non-blocking) using `RunCMD()` and their PIDs are captured instead of using blocking waits.
+- Client command-line assembly (`BuildClientArgs()`) updated to use accept a verbose flag.
+- Fullscreen handling improved: attempts borderless, always-on-top maximize, uses safer detection (tries ahk_pid, ahk_exe, or window title) and guarded with try/catch.
+- Log formatting now includes ISO-like timestamps and level tags.
+- Startup flow simplified: wrapper records start time and proceeds without blocking waits; main loop detects server crash and exits gracefully.
+
 ___
 
 ## [1.9.0] - 2026-02-26

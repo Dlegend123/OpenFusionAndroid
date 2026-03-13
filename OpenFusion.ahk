@@ -56,50 +56,14 @@ ShutdownWrapper() {
 
     Log("Shutting down wrapper...")
 
-    ; Close server process if running
-    if serverPid {
-        CloseProcess(serverPid)
-        serverPid := 0
-    }
-
-    Log("Wrapper shutdown complete")
     FlushLogs()
+	Log("Wrapper shutdown complete")
     ExitApp
 }
 
 ; ============================================================
 ; PROCESS HELPERS
 ; ============================================================
-; Get the PID of a child process for a given parent PID
-GetChildProcess(parentPID) {
-    TH32CS_SNAPPROCESS := 0x00000002
-    PROCESSENTRY32_SIZE := (A_PtrSize = 8) ? 568 : 556
-
-    snapshot := DllCall("CreateToolhelp32Snapshot","UInt",TH32CS_SNAPPROCESS,"UInt",0,"Ptr")
-    
-	if snapshot = -1
-		return 0
-
-    pe := Buffer(PROCESSENTRY32_SIZE,0)
-    NumPut("UInt",PROCESSENTRY32_SIZE,pe)
-
-    if !DllCall("Process32First","Ptr",snapshot,"Ptr",pe) {
-        DllCall("CloseHandle","Ptr",snapshot)
-        return 0
-    }
-
-    loop {
-        ppid := NumGet(pe, A_PtrSize=8 ? 32 : 24, "UInt")
-        if (ppid = parentPID) {
-            pid := NumGet(pe,8,"UInt")
-            DllCall("CloseHandle","Ptr",snapshot)
-            return pid
-        }
-    } until !DllCall("Process32Next","Ptr",snapshot,"Ptr",pe)
-
-    DllCall("CloseHandle","Ptr",snapshot)
-    return 0
-}
 
 ; Close a process by PID or name
 CloseProcess(pid) {
@@ -107,70 +71,21 @@ CloseProcess(pid) {
         ProcessClose(pid)
 }
 
-; Follow a process chain to get the real PID (child process)
-ResolvePID(pid) {
-    while (child := GetChildProcess(pid)) && child != pid
-        pid := child
-    return pid
-}
-
 ; ============================================================
 ; PROCESS LAUNCHING
 ; ============================================================
-; Prepare STARTUPINFO struct for CreateProcess
-PrepareStartupInfo(hide) {
-    P8 := (A_PtrSize = 8)
-    siSize := P8 ? 104 : 68
-    si := Buffer(siSize,0)
-
-    NumPut("UInt", siSize, si, 0)
-
-    if hide {
-        STARTF_USESHOWWINDOW := 0x1
-        NumPut("UInt", STARTF_USESHOWWINDOW, si, P8?60:44)
-        NumPut("UShort", 0, si, P8?64:48) ; SW_HIDE
-    }
-
-    return si
-}
-
-; Launch a process via CreateProcessW
-LaunchProcess(cmdLine, workDir, si, hide) {
-    P8 := (A_PtrSize = 8)
-    pi := Buffer(P8?24:16,0)
-	flags := hide ? 0x08000000 : 0  ; CREATE_NO_WINDOW only when hiding
-    cmdBuf := Buffer((StrLen(cmdLine)+1)*2)
-    StrPut(cmdLine, cmdBuf, "UTF-16")
-    wdPtr := 0
-    
-    if workDir {
-        dirBuf := Buffer((StrLen(workDir)+1)*2)
-        StrPut(workDir, dirBuf, "UTF-16")
-        wdPtr := dirBuf.Ptr
-    }
-
-    success := DllCall("CreateProcessW", "ptr",0, "ptr",cmdBuf, "ptr",0, "ptr",0, "int", 0, "int",flags, "ptr",0, "ptr",wdPtr, "ptr",si, "ptr",pi)
-    if !success
-        return -1
-
-    ; Close thread/process handles
-    if P8 {
-        DllCall("CloseHandle","ptr",NumGet(pi,0,"Ptr"))
-        DllCall("CloseHandle","ptr",NumGet(pi,8,"Ptr"))
-    } else {
-        DllCall("CloseHandle","ptr",NumGet(pi,0,"Ptr"))
-        DllCall("CloseHandle","ptr",NumGet(pi,4,"Ptr"))
-    }
-
-    return P8 ? NumGet(pi,16,"UInt") : NumGet(pi,8,"UInt")
-}
-
 ; Wrapper to start a process with optional output capture
-RunCMD(cmdLine, workDir:="", hide:=false) {
-    si := PrepareStartupInfo(hide)
-    pid := LaunchProcess(cmdLine, workDir, si, hide)
-	
-	return pid > 0 ? ResolvePID(pid) : pid
+RunCMD(cmdLine, workDir := "", hide := false) {
+
+    options := hide ? "Hide" : ""
+
+    try {
+        Run(cmdLine, workDir, options, &pid)
+    } catch {
+        return -1
+    }
+
+    return pid
 }
 
 ; ============================================================
@@ -183,9 +98,7 @@ StartServer() {
     serverPid := RunCMD('"' exe '"', c["server_dir"])
     
     if (serverPid <= 0) {
-        errCode := DllCall("Kernel32\GetLastError")
-        MsgBox("Server failed to start.`nWinErr=" errCode)
-        Log("Failed to start server: " exe " WinErr=" errCode,"ERROR")
+        Log("Failed to start server: " exe,"ERROR")
         return
     }
     
@@ -211,6 +124,8 @@ BuildClientArgs() {
         args .= ' -l ' Quote(c["log_file"])
     if c["force_vulkan"] = "true"
         args .= " --force-vulkan"
+    if c["verbose"] = "true"
+        args .= " -v"
         
     return args
 }
@@ -219,24 +134,21 @@ ApplyFullscreen() {
     global clientPid, c
     
     try {
-            hwnd := WinExist("ahk_pid " clientPid)
-            
-            if !hwnd
-                hwnd := WinExist("ahk_exe " c["launcher_exe"])
-            
-            if !hwnd && c["window_title"]
-                hwnd := WinExist(c["window_title"])
-                
-            if hwnd {
-    			WinSetAlwaysOnTop(true, hwnd)
-    			WinSetStyle("-0xC40000", hwnd)
-    			WinMaximize(hwnd)
-    
-    			Log("Borderless fullscreen applied")
-    			SetTimer(ApplyFullscreen, 0)
-                ShutdownWrapper()
-    		}
-		
+        hwnd := WinExist("ahk_pid " clientPid)
+        if !hwnd
+            hwnd := WinExist("ahk_exe " c["launcher_exe"])
+        if !hwnd && c["window_title"]
+            hwnd := WinExist(c["window_title"])
+
+        if hwnd {
+            WinSetAlwaysOnTop(true, hwnd)
+            WinSetStyle("-0xC40000", hwnd)  ; Removes title bar and borders
+            WinMaximize(hwnd)
+            Log("Borderless fullscreen applied")
+
+            SetTimer(ApplyFullscreen, 0)
+            ShutdownWrapper()
+        }
     } catch as e {
         Log("Failed to apply fullscreen: " e.Message, "ERROR")
     }
@@ -251,28 +163,16 @@ LaunchClient() {
     clientPid := RunCMD('"' exe '" ' args, c["launcher_dir"])
 
     if (clientPid <= 0) {
-        errCode := DllCall("Kernel32\GetLastError")
-        MsgBox("Client failed to start.`nWinErr=" errCode)
-        Log("Failed to start client: " exe " WinErr=" errCode,"ERROR")
+        Log("Failed to start client: " exe,"ERROR")
         return
     }
 
     Log("Started client: " exe " (PID=" clientPid ")")
-
-    if (c["fullscreen"] == "true")
-        SetTimer(ApplyFullscreen, 100)
-		
-	;SetTimer(MonitorClient, 200)
-}
-
-MonitorClient() {
-    global clientPid, c
-	
-    if !ProcessExist(clientPid) {
-        SetTimer(MonitorClient, 0)
-        SetTimer(ApplyFullscreen, 0)
-        ShutdownWrapper()
-    }
+    
+	  if c["fullscreen"] == "true"
+	      SetTimer(ApplyFullscreen, 200)
+	  else
+	      ShutdownWrapper()
 }
 
 ; ============================================================
@@ -361,13 +261,13 @@ LoadConfig() {
         "window_title", s.Get("window_title","FusionFall"),
         "force_vulkan", s.Get("force_vulkan","false"),
         "fullscreen", s.Get("fullscreen","false"),
+		"verbose", s.Get("verbose","true"),
         "log_file", resolvePath(s.Get("log_file",""))
     )
 
     c["cache_dir_url"] := StrReplace(c["cache_dir"],"\","/")
 
     loginPort := ini["login"].Get("port","8023")
-    shardPort := ini["shard"].Get("port","8024")
 
     c["address"] := s.Get("address","127.0.0.1:" loginPort)
 
