@@ -56,8 +56,12 @@ ShutdownWrapper() {
 
     Log("Shutting down wrapper...")
 
+    ; Close server process if running
+    if serverPid 
+        CloseProcess(serverPid)
+    
+    Log("Wrapper shutdown complete")
     FlushLogs()
-	Log("Wrapper shutdown complete")
     ExitApp
 }
 
@@ -71,12 +75,62 @@ CloseProcess(pid) {
         ProcessClose(pid)
 }
 
+MonitorClient() {
+    global clientPid, serverPid, c
+    windowTitle := c.Has("window_title") ? c["window_title"] : "FusionFall"
+    if !ProcessExist(clientPid) && !WinExist(windowTitle) {
+        ShutdownWrapper()
+    }
+}
+
+; Get the PID of a child process for a given parent PID
+GetChildProcess(parentPID) {
+    TH32CS_SNAPPROCESS := 0x00000002
+    PROCESSENTRY32_SIZE := (A_PtrSize = 8) ? 568 : 556
+
+    snapshot := DllCall("CreateToolhelp32Snapshot","UInt",TH32CS_SNAPPROCESS,"UInt",0,"Ptr")
+    if snapshot = -1
+        return 0
+
+    pe := Buffer(PROCESSENTRY32_SIZE,0)
+    NumPut("UInt",PROCESSENTRY32_SIZE,pe)
+
+    if !DllCall("Process32First","Ptr",snapshot,"Ptr",pe) {
+        DllCall("CloseHandle","Ptr",snapshot)
+        return 0
+    }
+
+    loop {
+        ppid := NumGet(pe,24,"UInt")
+        if (ppid = parentPID) {
+            pid := NumGet(pe,8,"UInt")
+            DllCall("CloseHandle","Ptr",snapshot)
+            return pid
+        }
+    } until !DllCall("Process32Next","Ptr",snapshot,"Ptr",pe)
+
+    DllCall("CloseHandle","Ptr",snapshot)
+    return 0
+}
+
+; Follow a process chain to get the real PID (child process)
+ResolvePID(pid) {
+    last := pid
+    Loop 10 {
+        child := GetChildProcess(pid)
+        if !child || child = last
+            break
+        last := pid := child
+    }
+    return pid
+}
+
 ; ============================================================
 ; PROCESS LAUNCHING
 ; ============================================================
 ; Wrapper to start a process with optional output capture
 RunCMD(cmdLine, workDir := "", hide := false) {
-
+    ; Prepare RunWait options
     options := hide ? "Hide" : ""
 
     try {
@@ -95,7 +149,7 @@ StartServer() {
     global c, serverPid
     exe := c["server"]
     
-    serverPid := RunCMD('"' exe '"', c["server_dir"])
+    serverPid := ResolvePID(RunCMD('"' exe '"', c["server_dir"], true))
     
     if (serverPid <= 0) {
         Log("Failed to start server: " exe,"ERROR")
@@ -118,12 +172,21 @@ BuildClientArgs() {
     
     if c["username"]
         args .= ' --username ' Quote(c["username"])
+		
     if c["token"]
         args .= ' --token ' Quote(c["token"])
+		
     if c["log_file"]
         args .= ' -l ' Quote(c["log_file"])
+		
     if c["force_vulkan"] = "true"
         args .= " --force-vulkan"
+		
+	if c["fullscreen"] = "true" {
+        args .= " --width " A_ScreenWidth
+		args .= " --height " A_ScreenHeight
+	}
+	
     if c["verbose"] = "true"
         args .= " -v"
         
@@ -143,11 +206,10 @@ ApplyFullscreen() {
         if hwnd {
             WinSetAlwaysOnTop(true, hwnd)
             WinSetStyle("-0xC40000", hwnd)  ; Removes title bar and borders
-            WinMaximize(hwnd)
+			
             Log("Borderless fullscreen applied")
 
             SetTimer(ApplyFullscreen, 0)
-            ShutdownWrapper()
         }
     } catch as e {
         Log("Failed to apply fullscreen: " e.Message, "ERROR")
@@ -160,7 +222,7 @@ LaunchClient() {
     args := BuildClientArgs()
     exe := c["launcher"]
     
-    clientPid := RunCMD('"' exe '" ' args, c["launcher_dir"])
+    clientPid := ResolvePID(RunCMD('"' exe '" ' args, c["launcher_dir"]))
 
     if (clientPid <= 0) {
         Log("Failed to start client: " exe,"ERROR")
@@ -171,8 +233,8 @@ LaunchClient() {
     
 	  if c["fullscreen"] == "true"
 	      SetTimer(ApplyFullscreen, 200)
-	  else
-	      ShutdownWrapper()
+	 
+	 SetTimer(MonitorClient,400)
 }
 
 ; ============================================================
@@ -187,8 +249,7 @@ Main() {
         return
     }
 
-    if !clientPid
-        LaunchClient()
+    LaunchClient()
 }
 
 LoadIniFile(path) {
@@ -261,7 +322,7 @@ LoadConfig() {
         "window_title", s.Get("window_title","FusionFall"),
         "force_vulkan", s.Get("force_vulkan","false"),
         "fullscreen", s.Get("fullscreen","false"),
-		"verbose", s.Get("verbose","true"),
+		"verbose", s.Get("verbose","false"),
         "log_file", resolvePath(s.Get("log_file",""))
     )
 

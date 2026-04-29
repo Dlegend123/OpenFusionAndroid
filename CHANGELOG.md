@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 **Language:** AutoHotkey v2  
 **Last Updated:** 2026-03-12  
 ___
+## [2.0.1] - 2026-04-29
+### Added
+- Added `--verbose` flag to client launch parameters for more detailed logging.
+- Improved error handling in `RunCMD()` to capture and log any launch failures.
+- Added log flushing on wrapper shutdown to ensure all logs are saved before exit.
+- Added tracking of server and client PIDs to allow for better crash detection and potential future enhancements like automatic restarts.
+- Added `MonitorClient()` to close the server if the client process exits.
+- 
+### Changed
+- Updated `BuildClientArgs()` to include the `--verbose` flag when specified in the config.
+- Updated `ShutdownWrapper()` to flush logs before exiting.
+- Updated the fullscreen logic to allow ffrunner to handle the size change when borderless fullscreen is requested.
+
+---
 
 ## [2.0.0] - 2026-03-12
 ### Added
