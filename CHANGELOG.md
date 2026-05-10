@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 **Last Updated:** 2026-03-12  
 ___
 
-## [2.0.1] - 2026-05-10
+## [2.1.0] - 2026-05-10
 - Added 'fps_limit' parameter to config file to allow users to set a custom FPS limit for the game. If not specified, it defaults to 60 FPS.
 - Added 'dxvk_hud' parameter to config file to allow users to enable or disable the DXVK HUD for performance monitoring. Defaults to 'off'.
 - Disabled 'WINE_FULLSCREEN_FSR' and 'WINE_FULLSCREEN_FSR_MODE' environment variables by default to prevent conflicts with other display enhancements.
