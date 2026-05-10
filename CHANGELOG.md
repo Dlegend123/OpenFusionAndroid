@@ -9,20 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 **Language:** AutoHotkey v2  
 **Last Updated:** 2026-03-12  
 ___
-## [2.0.1] - 2026-04-29
-### Added
-- Added `--verbose` flag to client launch parameters for more detailed logging.
-- Improved error handling in `RunCMD()` to capture and log any launch failures.
-- Added log flushing on wrapper shutdown to ensure all logs are saved before exit.
-- Added tracking of server and client PIDs to allow for better crash detection and potential future enhancements like automatic restarts.
-- Added `MonitorClient()` to close the server if the client process exits.
-- 
-### Changed
-- Updated `BuildClientArgs()` to include the `--verbose` flag when specified in the config.
-- Updated `ShutdownWrapper()` to flush logs before exiting.
-- Updated the fullscreen logic to allow ffrunner to handle the size change when borderless fullscreen is requested.
 
----
+## [2.0.1] - 2026-05-10
+- Added 'fps_limit' parameter to config file to allow users to set a custom FPS limit for the game. If not specified, it defaults to 60 FPS.
+- Added 'dxvk_hud' parameter to config file to allow users to enable or disable the DXVK HUD for performance monitoring. Defaults to 'off'.
+- Disabled 'WINE_FULLSCREEN_FSR' and 'WINE_FULLSCREEN_FSR_MODE' environment variables by default to prevent conflicts with other display enhancements.
+- Changed the name for the param of the gamre client from 'launcher' to 'client'.
+- Adjusted the fullscreen handling logic.
 
 ## [2.0.0] - 2026-03-12
 ### Added
